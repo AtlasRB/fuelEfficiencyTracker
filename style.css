@@ -370,6 +370,18 @@ tr:hover td { background: var(--surface2); color: var(--text); }
 }
 .delete-btn:hover { color: var(--danger); background: var(--danger-dim); }
 
+.edit-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+.edit-btn:hover { color: var(--accent-text); background: var(--accent-dim); }
+
 .form-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 
 .divider { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }

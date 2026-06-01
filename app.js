@@ -25,6 +25,15 @@ function deleteEntry(id) {
   saveData(data);
 }
 
+function updateEntry(id, changes) {
+  const data = getData();
+  const idx = data.entries.findIndex(e => e.id === id);
+  if (idx === -1) return;
+  data.entries[idx] = { ...data.entries[idx], ...changes };
+  data.entries.sort((a, b) => a.date.localeCompare(b.date));
+  saveData(data);
+}
+
 // ─── NAV ──────────────────────────────────────────────────────
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -49,14 +58,14 @@ function setTripType(type) {
 
 function logTrip() {
   const date  = document.getElementById('trip-date').value;
-  const miles = parseFloat(document.getElementById('trip-miles').value);
+  const miles = Math.round(parseFloat(document.getElementById('trip-miles').value));
   const note  = document.getElementById('trip-note').value.trim();
 
   if (!date)           { showFeedback('trip', '⚠ Please select a date.', true); return; }
   if (!miles || miles <= 0) { showFeedback('trip', '⚠ Please enter valid miles.', true); return; }
 
   addEntry({ type: 'trip', subtype: tripType, date, miles, note });
-  showFeedback('trip', `✓ Logged ${miles.toFixed(1)} miles on ${formatDate(date)}`);
+  showFeedback('trip', `✓ Logged ${miles} miles on ${formatDate(date)}`);
   clearTripForm();
   renderRecentTrips();
 }
@@ -138,9 +147,12 @@ function renderRecentTrips() {
       <tr>
         <td>${formatDate(t.date)}</td>
         <td><span class="badge badge-trip">${t.subtype || 'day'}</span></td>
-        <td>${t.miles.toFixed(1)}</td>
+        <td>${Math.round(t.miles)}</td>
         <td style="font-family:'DM Sans',sans-serif;color:var(--muted2)">${t.note || '—'}</td>
-        <td><button class="delete-btn" onclick="deleteAndRefresh(${t.id},'trip')" title="Delete">✕</button></td>
+        <td style="display:flex;gap:4px;">
+          <button class="edit-btn" onclick="openEditModal(${t.id})" title="Edit">✎</button>
+          <button class="delete-btn" onclick="deleteAndRefresh(${t.id},'trip')" title="Delete">✕</button>
+        </td>
       </tr>`).join('')}
     </tbody>
   </table></div>`;
@@ -165,7 +177,10 @@ function renderRecentFuel() {
         <td>£${f.cost.toFixed(2)}</td>
         <td>${f.ppl.toFixed(1)}p</td>
         <td style="font-family:'DM Sans',sans-serif;color:var(--muted2)">${f.note || '—'}</td>
-        <td><button class="delete-btn" onclick="deleteAndRefresh(${f.id},'fuel')" title="Delete">✕</button></td>
+        <td style="display:flex;gap:4px;">
+          <button class="edit-btn" onclick="openEditModal(${f.id})" title="Edit">✎</button>
+          <button class="delete-btn" onclick="deleteAndRefresh(${f.id},'fuel')" title="Delete">✕</button>
+        </td>
       </tr>`).join('')}
     </tbody>
   </table></div>`;
@@ -208,10 +223,13 @@ function renderHistory() {
         return `<tr>
           <td>${formatDate(e.date)}</td>
           <td><span class="badge badge-trip">${e.subtype || 'trip'}</span></td>
-          <td>${e.miles.toFixed(1)} miles</td>
+          <td>${Math.round(e.miles)} miles</td>
           <td style="color:var(--muted)">—</td>
           <td style="font-family:'DM Sans',sans-serif;color:var(--muted2)">${e.note || '—'}</td>
-          <td><button class="delete-btn" onclick="deleteAndRenderHistory(${e.id})" title="Delete">✕</button></td>
+          <td style="display:flex;gap:4px;">
+            <button class="edit-btn" onclick="openEditModal(${e.id})" title="Edit">✎</button>
+            <button class="delete-btn" onclick="deleteAndRenderHistory(${e.id})" title="Delete">✕</button>
+          </td>
         </tr>`;
       } else {
         return `<tr>
@@ -220,7 +238,10 @@ function renderHistory() {
           <td>${e.litres.toFixed(2)}L / ${(e.litres / LITRES_PER_GALLON).toFixed(2)}gal</td>
           <td>£${e.cost.toFixed(2)}</td>
           <td style="font-family:'DM Sans',sans-serif;color:var(--muted2)">${e.note || '—'}</td>
-          <td><button class="delete-btn" onclick="deleteAndRenderHistory(${e.id})" title="Delete">✕</button></td>
+          <td style="display:flex;gap:4px;">
+            <button class="edit-btn" onclick="openEditModal(${e.id})" title="Edit">✎</button>
+            <button class="delete-btn" onclick="deleteAndRenderHistory(${e.id})" title="Delete">✕</button>
+          </td>
         </tr>`;
       }
     }).join('')}
@@ -231,6 +252,72 @@ function renderHistory() {
 function deleteAndRenderHistory(id) {
   deleteEntry(id);
   renderHistory();
+}
+
+// ─── EDIT MODAL ───────────────────────────────────────────────
+function openEditModal(id) {
+  const { entries } = getData();
+  const entry = entries.find(e => e.id === id);
+  if (!entry) return;
+
+  document.getElementById('edit-entry-id').value = id;
+
+  if (entry.type === 'trip') {
+    document.getElementById('edit-trip-fields').style.display = 'block';
+    document.getElementById('edit-fuel-fields').style.display = 'none';
+    document.getElementById('edit-modal-title').textContent   = 'Edit trip';
+    document.getElementById('edit-trip-date').value    = entry.date;
+    document.getElementById('edit-trip-miles').value   = entry.miles;
+    document.getElementById('edit-trip-subtype').value = entry.subtype || 'day';
+    document.getElementById('edit-trip-note').value    = entry.note || '';
+  } else {
+    document.getElementById('edit-trip-fields').style.display = 'none';
+    document.getElementById('edit-fuel-fields').style.display = 'block';
+    document.getElementById('edit-modal-title').textContent   = 'Edit fill-up';
+    document.getElementById('edit-fuel-date').value   = entry.date;
+    document.getElementById('edit-fuel-litres').value = entry.litres;
+    document.getElementById('edit-fuel-cost').value   = entry.cost;
+    document.getElementById('edit-fuel-note').value   = entry.note || '';
+  }
+
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').classList.remove('open');
+}
+
+function saveEdit() {
+  const id    = parseFloat(document.getElementById('edit-entry-id').value);
+  const { entries } = getData();
+  const entry = entries.find(e => e.id === id);
+  if (!entry) return;
+
+  if (entry.type === 'trip') {
+    const date  = document.getElementById('edit-trip-date').value;
+    const miles = Math.round(parseFloat(document.getElementById('edit-trip-miles').value));
+    const subtype = document.getElementById('edit-trip-subtype').value;
+    const note  = document.getElementById('edit-trip-note').value.trim();
+    if (!date)           { alert('Please select a date.');      return; }
+    if (!miles || miles <= 0) { alert('Please enter valid miles.'); return; }
+    updateEntry(id, { date, miles, subtype, note });
+  } else {
+    const date   = document.getElementById('edit-fuel-date').value;
+    const litres = parseFloat(document.getElementById('edit-fuel-litres').value);
+    const cost   = parseFloat(document.getElementById('edit-fuel-cost').value);
+    const note   = document.getElementById('edit-fuel-note').value.trim();
+    if (!date)             { alert('Please select a date.');          return; }
+    if (!litres || litres <= 0) { alert('Please enter valid litres.'); return; }
+    if (!cost   || cost   <= 0) { alert('Please enter valid cost.');   return; }
+    const ppl = (cost / litres) * 100;
+    updateEntry(id, { date, litres, cost, ppl, note });
+  }
+
+  closeEditModal();
+  renderRecentTrips();
+  renderRecentFuel();
+  renderHistory();
+  renderDashboard();
 }
 
 // ─── EXPORT CSV ───────────────────────────────────────────────
@@ -454,7 +541,7 @@ function renderDashboard() {
 
   const fmt = (v, dec = 1) => v !== null ? v.toFixed(dec) : '—';
 
-  document.getElementById('stat-miles').textContent   = totalMiles   > 0 ? totalMiles.toFixed(1)   : '—';
+  document.getElementById('stat-miles').textContent   = totalMiles   > 0 ? Math.round(totalMiles).toString() : '—';
   document.getElementById('stat-litres').textContent  = totalLitres  > 0 ? totalLitres.toFixed(2)  : '—';
   document.getElementById('stat-cost').textContent    = totalCost    > 0 ? '£' + totalCost.toFixed(2) : '—';
   document.getElementById('stat-cpm').textContent     = cpm   ? cpm.toFixed(1) + 'p'   : '—';

@@ -7,7 +7,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
 </head>
 <body>
 
@@ -177,7 +176,7 @@
         </div>
         <div class="form-group">
           <label>Miles driven</label>
-          <input type="number" id="trip-miles" placeholder="e.g. 42.5" min="0" step="0.1">
+          <input type="number" id="trip-miles" placeholder="e.g. 42" min="0" step="1">
         </div>
       </div>
 
@@ -300,6 +299,71 @@
   </div><!-- /history -->
 
 </main>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     EDIT MODAL
+════════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" id="edit-modal">
+  <div class="modal">
+
+    <h3 id="edit-modal-title">Edit entry</h3>
+    <input type="hidden" id="edit-entry-id">
+
+    <!-- Trip fields -->
+    <div id="edit-trip-fields">
+      <div class="form-grid" style="margin-top:1rem;">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="edit-trip-date">
+        </div>
+        <div class="form-group">
+          <label>Miles driven</label>
+          <input type="number" id="edit-trip-miles" min="0" step="1">
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select id="edit-trip-subtype">
+            <option value="day">Day total</option>
+            <option value="trip">Single trip</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label>Note</label>
+        <input type="text" id="edit-trip-note" placeholder="Optional note">
+      </div>
+    </div>
+
+    <!-- Fuel fields -->
+    <div id="edit-fuel-fields">
+      <div class="form-grid" style="margin-top:1rem;">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="edit-fuel-date">
+        </div>
+        <div class="form-group">
+          <label>Litres added</label>
+          <input type="number" id="edit-fuel-litres" min="0" step="0.1">
+        </div>
+        <div class="form-group">
+          <label>Total cost (£)</label>
+          <input type="number" id="edit-fuel-cost" min="0" step="0.01">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:1rem;">
+        <label>Station / Note</label>
+        <input type="text" id="edit-fuel-note" placeholder="Optional note">
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost"   onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save changes</button>
+    </div>
+
+  </div>
+</div>
 
 
 <!-- ═══════════════════════════════════════════════════════════
