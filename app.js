@@ -579,27 +579,27 @@ function renderCharts(fuels, trips) {
   const costData    = sorted.map(f => parseFloat(f.cost.toFixed(2)));
   const pplData     = sorted.map(f => parseFloat(f.ppl.toFixed(1)));
 
-  // Daily fuel usage — sum litres per calendar day across all trip dates
+  // Sum trip miles per calendar date — multiple trips on one day count as one day
+  const milesByDate = {};
+  trips.forEach(t => {
+    milesByDate[t.date] = (milesByDate[t.date] || 0) + t.miles;
+  });
+
+  // Average miles by day of week, over distinct days driven
   const dayOrder = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const dayTotals = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
   const dayCounts = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
 
-  // Use trip entries (miles driven) as the usage signal, grouped by day of week
-  trips.forEach(t => {
-    const dow = dayOrder[new Date(t.date + 'T12:00:00').getDay()];
-    dayTotals[dow] += t.miles;
+  Object.entries(milesByDate).forEach(([date, miles]) => {
+    const dow = dayOrder[new Date(date + 'T12:00:00').getDay()];
+    dayTotals[dow] += miles;
     dayCounts[dow]++;
   });
 
   const usageLabels = dayOrder;
   const usageData   = dayOrder.map(d => dayCounts[d] > 0 ? Math.round(dayTotals[d] / dayCounts[d]) : 0);
 
-  // Miles driven per day — sum trip miles per calendar date,
-  // including every day in the range so non-driving days show as 0
-  const milesByDate = {};
-  trips.forEach(t => {
-    milesByDate[t.date] = (milesByDate[t.date] || 0) + t.miles;
-  });
+  // Miles driven per day — include every day in the range so non-driving days show as 0
   const loggedDates = Object.keys(milesByDate).sort();
   const milesDates  = [];
   if (loggedDates.length) {
@@ -671,8 +671,8 @@ function renderCharts(fuels, trips) {
         backgroundColor: '#34d39915',
         borderWidth: 2,
         pointRadius: milesData.map((_, i) => i === maxMilesIdx ? 4 : 0),
-        pointHoverRadius: milesData.map((_, i) => i === maxMilesIdx ? 6 : 0),
-        pointHitRadius: milesData.map((_, i) => i === maxMilesIdx ? 12 : 0),
+        pointHoverRadius: milesData.map((_, i) => i === maxMilesIdx ? 6 : 5),
+        pointHitRadius: 12,
         pointBackgroundColor: '#34d399',
         tension: 0.35,
         fill: true
