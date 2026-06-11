@@ -37,14 +37,25 @@
         <h2>Overview</h2>
         <p id="date-range-label" class="text-muted text-sm">No entries yet</p>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <span class="text-sm text-muted">Period:</span>
-        <select id="period-select" style="width:auto;padding:6px 10px;font-size:13px;" onchange="renderDashboard()">
-          <option value="all">All time</option>
-          <option value="30">Last 30 days</option>
-          <option value="90">Last 90 days</option>
-          <option value="365">Last year</option>
-        </select>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+        <label class="switch-label" title="Estimate fuel used by miles driven since your last fill-up, based on your efficiency up to that point">
+          <span class="text-sm text-muted">Smart estimates</span>
+          <span class="switch">
+            <input type="checkbox" id="smart-toggle" onchange="toggleSmart()">
+            <span class="slider"></span>
+          </span>
+        </label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="text-sm text-muted">Period:</span>
+          <select id="period-select" style="width:auto;padding:6px 10px;font-size:13px;" onchange="renderDashboard()">
+            <option value="all">All time</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="365">Last year</option>
+            <option value="since-fuel">Since last fill-up</option>
+            <option value="last-tank">Last tank</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -71,6 +82,8 @@
         <div class="stat-unit">p/mile</div>
       </div>
     </div>
+
+    <div id="smart-note" class="smart-note" style="display:none;"></div>
 
     <!-- Efficiency + cost breakdown cards -->
     <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">

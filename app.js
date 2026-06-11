@@ -512,10 +512,56 @@ function clearAllData() {
 // ─── DASHBOARD STATS ──────────────────────────────────────────
 let costChart = null, effChart = null, usageChart = null, milesChart = null;
 
+function toggleSmart() {
+  localStorage.setItem('fuellog_smart', document.getElementById('smart-toggle').checked ? '1' : '0');
+  renderDashboard();
+}
+
+// Estimate fuel burned by trips logged after the last fill-up, assuming the
+// efficiency measured up to that fill-up still holds. Cost is estimated at
+// the price per litre paid at the last fill-up.
+function getSmartEstimate(trips) {
+  if (!document.getElementById('smart-toggle').checked) return null;
+
+  const all = getData().entries; // kept date-sorted
+  const allFuels = all.filter(e => e.type === 'fuel');
+  if (!allFuels.length) return null;
+  const lastFuel = allFuels[allFuels.length - 1];
+
+  // Baseline efficiency from all data up to and including the last fill-up
+  const milesBefore  = all.filter(e => e.type === 'trip' && e.date <= lastFuel.date).reduce((s, e) => s + e.miles, 0);
+  const litresBefore = allFuels.reduce((s, e) => s + e.litres, 0);
+  if (milesBefore <= 0 || litresBefore <= 0) return null;
+  const baselineMPL = milesBefore / litresBefore;
+
+  const milesAfter = trips.filter(t => t.date > lastFuel.date).reduce((s, t) => s + t.miles, 0);
+  if (milesAfter <= 0) return null;
+
+  const litres = milesAfter / baselineMPL;
+  return { litres, cost: litres * (lastFuel.ppl / 100), milesAfter };
+}
+
 function getFilteredEntries() {
   const { entries } = getData();
   const period = document.getElementById('period-select').value;
   if (period === 'all') return entries;
+
+  if (period === 'since-fuel' || period === 'last-tank') {
+    const fuels = entries.filter(e => e.type === 'fuel'); // entries are kept date-sorted
+    const lastFuel = fuels[fuels.length - 1];
+
+    if (period === 'since-fuel') {
+      if (!lastFuel) return entries;
+      return entries.filter(e => e.date >= lastFuel.date);
+    }
+
+    // last-tank: between the previous fill-up and the latest one.
+    // The latest fill itself is excluded so litres/cost reflect the tank that was used.
+    const prevFuel = fuels[fuels.length - 2];
+    if (!prevFuel) return entries;
+    return entries.filter(e => e.date >= prevFuel.date && e.date <= lastFuel.date && e.id !== lastFuel.id);
+  }
+
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - parseInt(period));
   const cutoffStr = cutoff.toISOString().slice(0, 10);
@@ -527,9 +573,29 @@ function renderDashboard() {
   const trips   = entries.filter(e => e.type === 'trip');
   const fuels   = entries.filter(e => e.type === 'fuel');
 
-  const totalMiles   = trips.reduce((s, e) => s + e.miles,  0);
-  const totalLitres  = fuels.reduce((s, e) => s + e.litres, 0);
-  const totalCost    = fuels.reduce((s, e) => s + e.cost,   0);
+  const totalMiles = trips.reduce((s, e) => s + e.miles,  0);
+  let totalLitres  = fuels.reduce((s, e) => s + e.litres, 0);
+  const loggedCost = fuels.reduce((s, e) => s + e.cost,   0);
+  let totalCost    = loggedCost;
+
+  // Smart estimates: add predicted fuel/cost for miles driven since the last
+  // fill-up. Total spent always shows logged cost only; the estimated cost
+  // feeds the per-mile rates so they aren't understated.
+  const est = getSmartEstimate(trips);
+  if (est) {
+    totalLitres += est.litres;
+    totalCost   += est.cost;
+  }
+  const pre = est ? '~' : ''; // mark values that include estimates
+
+  const noteEl = document.getElementById('smart-note');
+  if (est) {
+    noteEl.style.display = 'block';
+    noteEl.textContent = `Smart estimates on — includes ~${est.litres.toFixed(1)}L (£${est.cost.toFixed(2)}) estimated for ${Math.round(est.milesAfter)} miles driven since your last fill-up.`;
+  } else {
+    noteEl.style.display = 'none';
+  }
+
   const totalGallons = totalLitres / LITRES_PER_GALLON;
 
   const mpl  = totalLitres > 0 && totalMiles > 0 ? totalMiles / totalLitres : null;
@@ -542,18 +608,18 @@ function renderDashboard() {
   const fmt = (v, dec = 1) => v !== null ? v.toFixed(dec) : '—';
 
   document.getElementById('stat-miles').textContent   = totalMiles   > 0 ? Math.round(totalMiles).toString() : '—';
-  document.getElementById('stat-litres').textContent  = totalLitres  > 0 ? totalLitres.toFixed(2)  : '—';
-  document.getElementById('stat-cost').textContent    = totalCost    > 0 ? '£' + totalCost.toFixed(2) : '—';
-  document.getElementById('stat-cpm').textContent     = cpm   ? cpm.toFixed(1) + 'p'   : '—';
-  document.getElementById('stat-gallons').textContent = totalGallons > 0 ? totalGallons.toFixed(2) + ' gal' : '—';
+  document.getElementById('stat-litres').textContent  = totalLitres  > 0 ? pre + totalLitres.toFixed(2)  : '—';
+  document.getElementById('stat-cost').textContent    = loggedCost   > 0 ? '£' + loggedCost.toFixed(2) : '—';
+  document.getElementById('stat-cpm').textContent     = cpm   ? pre + cpm.toFixed(1) + 'p'   : '—';
+  document.getElementById('stat-gallons').textContent = totalGallons > 0 ? pre + totalGallons.toFixed(2) + ' gal' : '—';
 
-  document.getElementById('eff-mpl').textContent  = fmt(mpl)  + (mpl  ? ' mi/L'    : '');
-  document.getElementById('eff-mpg').textContent  = fmt(mpg)  + (mpg  ? ' mpg'     : '');
-  document.getElementById('eff-l100').textContent = fmt(l100) + (l100 ? ' L/100km' : '');
+  document.getElementById('eff-mpl').textContent  = (mpl  ? pre : '') + fmt(mpl)  + (mpl  ? ' mi/L'    : '');
+  document.getElementById('eff-mpg').textContent  = (mpg  ? pre : '') + fmt(mpg)  + (mpg  ? ' mpg'     : '');
+  document.getElementById('eff-l100').textContent = (l100 ? pre : '') + fmt(l100) + (l100 ? ' L/100km' : '');
 
   document.getElementById('avg-ppl').textContent     = avgPPL ? avgPPL.toFixed(1) + 'p/L' : '—';
   document.getElementById('avg-ppg').textContent     = avgPPG ? '£' + avgPPG.toFixed(2) + '/gal' : '—';
-  document.getElementById('avg-per100').textContent  = cpm    ? '£' + (cpm / 100 * 100).toFixed(2) : '—';
+  document.getElementById('avg-per100').textContent  = cpm    ? pre + '£' + (cpm / 100 * 100).toFixed(2) : '—';
   document.getElementById('fuel-count').textContent  = fuels.length;
   document.getElementById('trip-count').textContent  = trips.length;
 
@@ -728,6 +794,7 @@ function formatDate(str) {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('trip-date').value = todayStr();
   document.getElementById('fuel-date').value = todayStr();
+  document.getElementById('smart-toggle').checked = localStorage.getItem('fuellog_smart') === '1';
   document.getElementById('fuel-litres').addEventListener('input', () => calcFuelPPL('litres'));
   document.getElementById('fuel-cost').addEventListener('input',   () => calcFuelPPL('cost'));
   document.getElementById('fuel-ppl').addEventListener('input',    () => calcFuelPPL('ppl'));
