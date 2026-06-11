@@ -519,22 +519,30 @@ function toggleSmart() {
 
 // Estimate fuel burned by trips logged after the last fill-up, assuming the
 // efficiency measured up to that fill-up still holds. Cost is estimated at
-// the price per litre paid at the last fill-up.
+// the price per litre paid at the last fill-up. Entries only store a date,
+// so same-day trips are split by list position: the date-sorted array keeps
+// same-date entries in the order they were logged.
 function getSmartEstimate(trips) {
   if (!document.getElementById('smart-toggle').checked) return null;
 
   const all = getData().entries; // kept date-sorted
-  const allFuels = all.filter(e => e.type === 'fuel');
-  if (!allFuels.length) return null;
-  const lastFuel = allFuels[allFuels.length - 1];
+  let lastFuelIdx = -1;
+  for (let i = all.length - 1; i >= 0; i--) {
+    if (all[i].type === 'fuel') { lastFuelIdx = i; break; }
+  }
+  if (lastFuelIdx === -1) return null;
+  const lastFuel = all[lastFuelIdx];
+
+  // Trips logged after the last fill-up (including later the same day)
+  const afterIds = new Set(all.slice(lastFuelIdx + 1).filter(e => e.type === 'trip').map(e => e.id));
 
   // Baseline efficiency from all data up to and including the last fill-up
-  const milesBefore  = all.filter(e => e.type === 'trip' && e.date <= lastFuel.date).reduce((s, e) => s + e.miles, 0);
-  const litresBefore = allFuels.reduce((s, e) => s + e.litres, 0);
+  const milesBefore  = all.filter(e => e.type === 'trip' && !afterIds.has(e.id)).reduce((s, e) => s + e.miles, 0);
+  const litresBefore = all.filter(e => e.type === 'fuel').reduce((s, e) => s + e.litres, 0);
   if (milesBefore <= 0 || litresBefore <= 0) return null;
   const baselineMPL = milesBefore / litresBefore;
 
-  const milesAfter = trips.filter(t => t.date > lastFuel.date).reduce((s, t) => s + t.miles, 0);
+  const milesAfter = trips.filter(t => afterIds.has(t.id)).reduce((s, t) => s + t.miles, 0);
   if (milesAfter <= 0) return null;
 
   const litres = milesAfter / baselineMPL;
