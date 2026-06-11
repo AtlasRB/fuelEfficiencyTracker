@@ -510,7 +510,7 @@ function clearAllData() {
 }
 
 // ─── DASHBOARD STATS ──────────────────────────────────────────
-let costChart = null, effChart = null;
+let costChart = null, effChart = null, usageChart = null;
 
 function getFilteredEntries() {
   const { entries } = getData();
@@ -570,27 +570,43 @@ function renderDashboard() {
   }
 
   document.getElementById('no-data-msg').style.display = fuels.length > 0 ? 'none' : 'block';
-  renderCharts(fuels);
+  renderCharts(fuels, trips);
 }
 
-function renderCharts(fuels) {
-  const sorted    = [...fuels].sort((a, b) => a.date.localeCompare(b.date));
-  const costLabels = sorted.map(f => formatDate(f.date));
-  const costData   = sorted.map(f => parseFloat(f.cost.toFixed(2)));
-  const effData    = sorted.map(f => parseFloat((f.ppl / 100 * LITRES_PER_GALLON).toFixed(2)));
+function renderCharts(fuels, trips) {
+  const sorted      = [...fuels].sort((a, b) => a.date.localeCompare(b.date));
+  const costLabels  = sorted.map(f => formatDate(f.date));
+  const costData    = sorted.map(f => parseFloat(f.cost.toFixed(2)));
+  const pplData     = sorted.map(f => parseFloat(f.ppl.toFixed(1)));
+
+  // Daily fuel usage — sum litres per calendar day across all trip dates
+  const dayOrder = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayTotals = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
+  const dayCounts = { Sun: 0, Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0 };
+
+  // Use trip entries (miles driven) as the usage signal, grouped by day of week
+  trips.forEach(t => {
+    const dow = dayOrder[new Date(t.date + 'T12:00:00').getDay()];
+    dayTotals[dow] += t.miles;
+    dayCounts[dow]++;
+  });
+
+  const usageLabels = dayOrder;
+  const usageData   = dayOrder.map(d => dayCounts[d] > 0 ? Math.round(dayTotals[d] / dayCounts[d]) : 0);
 
   const chartDefaults = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
-      x: { grid: { color: '#2a312d' }, ticks: { color: '#6b7a72', font: { family: 'DM Mono', size: 11 } } },
-      y: { grid: { color: '#2a312d' }, ticks: { color: '#6b7a72', font: { family: 'DM Mono', size: 11 } } }
+      x: { grid: { color: '#2c2840' }, ticks: { color: '#6b6680', font: { family: 'DM Mono', size: 11 } } },
+      y: { grid: { color: '#2c2840' }, ticks: { color: '#6b6680', font: { family: 'DM Mono', size: 11 } } }
     }
   };
 
-  if (costChart) costChart.destroy();
-  if (effChart)  effChart.destroy();
+  if (costChart)   costChart.destroy();
+  if (effChart)    effChart.destroy();
+  if (usageChart)  usageChart.destroy();
 
   const c1 = document.getElementById('cost-chart').getContext('2d');
   costChart = new Chart(c1, {
@@ -608,7 +624,7 @@ function renderCharts(fuels) {
     data: {
       labels: costLabels,
       datasets: [{
-        data: effData,
+        data: pplData,
         borderColor: '#60a5fa',
         backgroundColor: '#3b82f615',
         borderWidth: 2,
@@ -618,7 +634,30 @@ function renderCharts(fuels) {
         fill: true
       }]
     },
-    options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, tooltip: { callbacks: { label: ctx => '£' + ctx.raw + '/gal' } } } }
+    options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, tooltip: { callbacks: { label: ctx => ctx.raw + 'p/L' } } } }
+  });
+
+  const c3 = document.getElementById('usage-chart').getContext('2d');
+  usageChart = new Chart(c3, {
+    type: 'bar',
+    data: {
+      labels: usageLabels,
+      datasets: [{
+        data: usageData,
+        backgroundColor: '#fbbf2444',
+        borderColor: '#fbbf24',
+        borderWidth: 1.5,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      ...chartDefaults,
+      plugins: { ...chartDefaults.plugins, tooltip: { callbacks: { label: ctx => 'Avg ' + ctx.raw + ' miles' } } },
+      scales: {
+        ...chartDefaults.scales,
+        y: { ...chartDefaults.scales.y, title: { display: true, text: 'Avg miles', color: '#6b6680', font: { family: 'DM Mono', size: 11 } } }
+      }
+    }
   });
 }
 
