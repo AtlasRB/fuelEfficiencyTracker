@@ -149,7 +149,7 @@ function renderRecentTrips() {
         <td><span class="badge badge-trip">${t.subtype || 'day'}</span></td>
         <td>${Math.round(t.miles)}</td>
         <td style="font-family:'DM Sans',sans-serif;color:var(--muted2)">${t.note || '—'}</td>
-        <td style="display:flex;gap:4px;">
+        <td class="row-actions">
           <button class="edit-btn" onclick="openEditModal(${t.id})" title="Edit">✎</button>
           <button class="delete-btn" onclick="deleteAndRefresh(${t.id},'trip')" title="Delete">✕</button>
         </td>
@@ -177,7 +177,7 @@ function renderRecentFuel() {
         <td>£${f.cost.toFixed(2)}</td>
         <td>${f.ppl.toFixed(1)}p</td>
         <td style="font-family:'DM Sans',sans-serif;color:var(--muted2)">${f.note || '—'}</td>
-        <td style="display:flex;gap:4px;">
+        <td class="row-actions">
           <button class="edit-btn" onclick="openEditModal(${f.id})" title="Edit">✎</button>
           <button class="delete-btn" onclick="deleteAndRefresh(${f.id},'fuel')" title="Delete">✕</button>
         </td>
@@ -226,7 +226,7 @@ function renderHistory() {
           <td>${Math.round(e.miles)} miles</td>
           <td style="color:var(--muted)">—</td>
           <td style="font-family:'DM Sans',sans-serif;color:var(--muted2)">${e.note || '—'}</td>
-          <td style="display:flex;gap:4px;">
+          <td class="row-actions">
             <button class="edit-btn" onclick="openEditModal(${e.id})" title="Edit">✎</button>
             <button class="delete-btn" onclick="deleteAndRenderHistory(${e.id})" title="Delete">✕</button>
           </td>
@@ -238,7 +238,7 @@ function renderHistory() {
           <td>${e.litres.toFixed(2)}L / ${(e.litres / LITRES_PER_GALLON).toFixed(2)}gal</td>
           <td>£${e.cost.toFixed(2)}</td>
           <td style="font-family:'DM Sans',sans-serif;color:var(--muted2)">${e.note || '—'}</td>
-          <td style="display:flex;gap:4px;">
+          <td class="row-actions">
             <button class="edit-btn" onclick="openEditModal(${e.id})" title="Edit">✎</button>
             <button class="delete-btn" onclick="deleteAndRenderHistory(${e.id})" title="Delete">✕</button>
           </td>
@@ -510,7 +510,7 @@ function clearAllData() {
 }
 
 // ─── DASHBOARD STATS ──────────────────────────────────────────
-let costChart = null, effChart = null, usageChart = null;
+let costChart = null, effChart = null, usageChart = null, milesChart = null;
 
 function getFilteredEntries() {
   const { entries } = getData();
@@ -594,6 +594,28 @@ function renderCharts(fuels, trips) {
   const usageLabels = dayOrder;
   const usageData   = dayOrder.map(d => dayCounts[d] > 0 ? Math.round(dayTotals[d] / dayCounts[d]) : 0);
 
+  // Miles driven per day — sum trip miles per calendar date,
+  // including every day in the range so non-driving days show as 0
+  const milesByDate = {};
+  trips.forEach(t => {
+    milesByDate[t.date] = (milesByDate[t.date] || 0) + t.miles;
+  });
+  const loggedDates = Object.keys(milesByDate).sort();
+  const milesDates  = [];
+  if (loggedDates.length) {
+    const cursor = new Date(loggedDates[0] + 'T12:00:00');
+    const last   = loggedDates[loggedDates.length - 1];
+    let dateStr;
+    do {
+      dateStr = cursor.toISOString().slice(0, 10);
+      milesDates.push(dateStr);
+      cursor.setDate(cursor.getDate() + 1);
+    } while (dateStr < last);
+  }
+  const milesLabels = milesDates.map(formatDate);
+  const milesData   = milesDates.map(d => Math.round(milesByDate[d] || 0));
+  const maxMilesIdx = milesData.indexOf(Math.max(...milesData));
+
   const chartDefaults = {
     responsive: true,
     maintainAspectRatio: false,
@@ -607,6 +629,7 @@ function renderCharts(fuels, trips) {
   if (costChart)   costChart.destroy();
   if (effChart)    effChart.destroy();
   if (usageChart)  usageChart.destroy();
+  if (milesChart)  milesChart.destroy();
 
   const c1 = document.getElementById('cost-chart').getContext('2d');
   costChart = new Chart(c1, {
@@ -635,6 +658,34 @@ function renderCharts(fuels, trips) {
       }]
     },
     options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, tooltip: { callbacks: { label: ctx => ctx.raw + 'p/L' } } } }
+  });
+
+  const c4 = document.getElementById('miles-chart').getContext('2d');
+  milesChart = new Chart(c4, {
+    type: 'line',
+    data: {
+      labels: milesLabels,
+      datasets: [{
+        data: milesData,
+        borderColor: '#34d399',
+        backgroundColor: '#34d39915',
+        borderWidth: 2,
+        pointRadius: milesData.map((_, i) => i === maxMilesIdx ? 4 : 0),
+        pointHoverRadius: milesData.map((_, i) => i === maxMilesIdx ? 6 : 0),
+        pointHitRadius: milesData.map((_, i) => i === maxMilesIdx ? 12 : 0),
+        pointBackgroundColor: '#34d399',
+        tension: 0.35,
+        fill: true
+      }]
+    },
+    options: {
+      ...chartDefaults,
+      plugins: { ...chartDefaults.plugins, tooltip: { callbacks: { label: ctx => ctx.raw + ' miles' } } },
+      scales: {
+        ...chartDefaults.scales,
+        y: { ...chartDefaults.scales.y, beginAtZero: true, title: { display: true, text: 'Miles', color: '#6b6680', font: { family: 'DM Mono', size: 11 } } }
+      }
+    }
   });
 
   const c3 = document.getElementById('usage-chart').getContext('2d');

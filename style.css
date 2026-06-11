@@ -382,6 +382,9 @@ tr:hover td { background: var(--surface2); color: var(--text); }
 }
 .edit-btn:hover { color: var(--accent-text); background: var(--accent-dim); }
 
+.row-actions { white-space: nowrap; }
+.row-actions .edit-btn { margin-right: 4px; }
+
 .form-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 
 .divider { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
