@@ -198,7 +198,7 @@ let histFilter = 'all';
 function setHistFilter(f) {
   histFilter = f;
   ['all', 'trips', 'fuel'].forEach(x => document.getElementById('hist-' + x).classList.remove('active'));
-  document.getElementById('hist-' + f).classList.add('active');
+  document.getElementById(f === 'trip' ? 'hist-trips' : 'hist-' + f).classList.add('active');
   renderHistory();
 }
 
@@ -216,15 +216,16 @@ function renderHistory() {
     return;
   }
 
+  const showCost = histFilter !== 'trip'; // cost column is redundant for trips only
   el.innerHTML = `<table>
-    <thead><tr><th>Date</th><th>Type</th><th>Detail</th><th>Cost</th><th>Note</th><th></th></tr></thead>
+    <thead><tr><th>Date</th><th>Type</th><th>Detail</th>${showCost ? '<th>Cost</th>' : ''}<th>Note</th><th></th></tr></thead>
     <tbody>${filtered.map(e => {
       if (e.type === 'trip') {
         return `<tr>
           <td>${formatDate(e.date)}</td>
           <td><span class="badge badge-trip">${e.subtype || 'trip'}</span></td>
           <td>${Math.round(e.miles)} miles</td>
-          <td style="color:var(--muted)">—</td>
+          ${showCost ? '<td style="color:var(--muted)">—</td>' : ''}
           <td style="font-family:'DM Sans',sans-serif;color:var(--muted2)">${e.note || '—'}</td>
           <td class="row-actions">
             <button class="edit-btn" onclick="openEditModal(${e.id})" title="Edit">✎</button>
@@ -560,14 +561,20 @@ function getFilteredEntries() {
 
     if (period === 'since-fuel') {
       if (!lastFuel) return entries;
-      return entries.filter(e => e.date >= lastFuel.date);
+      // Everything logged after the fill-up itself. Position-based rather
+      // than date-based, so a trip logged later the same day counts towards
+      // the new tank, and the fill-up's own litres/cost stay in the old one.
+      return entries.slice(entries.indexOf(lastFuel) + 1);
     }
 
     // last-tank: between the previous fill-up and the latest one.
-    // The latest fill itself is excluded so litres/cost reflect the tank that was used.
+    // The previous fill is excluded and the latest kept — refilling the tank
+    // measures the fuel that was burned over the miles in this window.
+    // Position-based, so trips logged after the latest fill on the same day
+    // belong to the next tank, not this one.
     const prevFuel = fuels[fuels.length - 2];
     if (!prevFuel) return entries;
-    return entries.filter(e => e.date >= prevFuel.date && e.date <= lastFuel.date && e.id !== lastFuel.id);
+    return entries.slice(entries.indexOf(prevFuel) + 1, entries.indexOf(lastFuel) + 1);
   }
 
   const cutoff = new Date();
@@ -580,6 +587,12 @@ function renderDashboard() {
   const entries = getFilteredEntries();
   const trips   = entries.filter(e => e.type === 'trip');
   const fuels   = entries.filter(e => e.type === 'fuel');
+
+  // Fill-up cost and price-per-litre charts describe the previous tank, so
+  // hide them in the since-last-fill-up view
+  const sinceFuel = document.getElementById('period-select').value === 'since-fuel';
+  document.getElementById('cost-chart-card').style.display = sinceFuel ? 'none' : '';
+  document.getElementById('eff-chart-card').style.display  = sinceFuel ? 'none' : '';
 
   const totalMiles = trips.reduce((s, e) => s + e.miles,  0);
   let totalLitres  = fuels.reduce((s, e) => s + e.litres, 0);
@@ -600,6 +613,9 @@ function renderDashboard() {
   if (est) {
     noteEl.style.display = 'block';
     noteEl.textContent = `Smart estimates on — includes ~${est.litres.toFixed(1)}L (£${est.cost.toFixed(2)}) estimated for ${Math.round(est.milesAfter)} miles driven since your last fill-up.`;
+  } else if (sinceFuel && !document.getElementById('smart-toggle').checked) {
+    noteEl.style.display = 'block';
+    noteEl.textContent = 'Tip — turn on Smart estimates to see estimated fuel usage and efficiency stats for this period, predicted from your efficiency up to the last fill-up.';
   } else {
     noteEl.style.display = 'none';
   }
@@ -643,7 +659,7 @@ function renderDashboard() {
     document.getElementById('date-range-label').textContent = 'No entries in this period';
   }
 
-  document.getElementById('no-data-msg').style.display = fuels.length > 0 ? 'none' : 'block';
+  document.getElementById('no-data-msg').style.display = entries.length > 0 ? 'none' : 'block';
   renderCharts(fuels, trips);
 }
 
